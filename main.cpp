@@ -3,19 +3,17 @@
 #include <vector>
 #include <algorithm>
 #include <sstream>
+#include <ctime>
 using namespace std;
 
 int proximoIdArquivo = 0;
 
-string typeToString(Type tipo) {
-    switch (tipo) {
-        case TEXT:    return "TEXT";
-        case NUMERIC: return "NUMERIC";
-        case BINARY:  return "BINARY";
-        case PROGRAM: return "PROGRAM";
-        default:      return "UNKNOWN";
-    }
-}
+enum Type {
+    TEXT,
+    NUMERIC,
+    BINARY,
+    PROGRAM
+};
 
 struct File {
     string nome;
@@ -34,15 +32,18 @@ struct Directory {
     string nome;
     Directory* pai;
     vector<Directory*> *subDiretorios;
-    vector<File*> arquivos;  
+    vector<File*> arquivos;
 };
 
-enum Type{
-    TEXT,
-    NUMERIC,
-    BINARY,
-    PROGRAM
-};
+string typeToString(Type tipo) {
+    switch (tipo) {
+        case TEXT:    return "TEXT";
+        case NUMERIC: return "NUMERIC";
+        case BINARY:  return "BINARY";
+        case PROGRAM: return "PROGRAM";
+        default:      return "UNKNOWN";
+    }
+}
 
 bool endsWith(const string& texto, const string& sufixo){
     if (texto.length() < sufixo.length()){
@@ -157,8 +158,6 @@ void echo(string argumentos, Directory* diretorioAtual, int usuarioAtualId){
 
     string conteudo = argumentos.substr(0, pos - (operacao.size() - 1));
 
-    cout << conteudo;
-
     while (!conteudo.empty() && conteudo.back() == ' '){
         conteudo.pop_back();
     }
@@ -208,27 +207,138 @@ void cat(string arquivo, Directory* diretorioAtual, int usuarioAtualId){
             if(hasPermission (arquivos[i], usuarioAtualId, 'r')){
                 cout << "cat: " << arquivos[i]->conteudo <<endl;
                 arquivos[i]->acesso = time(nullptr);
+            } else {
+                cout << "cat: você não possui permissão." << endl;
             }
-            cout << "cat: você não possui permissão." << endl;
             return;
         }
     }
     cout << "cat: arquivo '" << arquivo << "' não encontrado." << endl;
 }
 
-void cp(){
+void cp(string argumentos, Directory* diretorioAtual, int usuarioAtualId) {
+    int posEspaco = argumentos.find(' ');
+    if (posEspaco == string::npos) {
+        cout << "cp: uso: cp <origem> <destino>" << endl;
+        return;
+    }
 
+    string origem = argumentos.substr(0, posEspaco);
+    string destino = argumentos.substr(posEspaco + 1);
+
+    vector<File*>& arquivos = diretorioAtual->arquivos;
+
+    File* arquivoOrigem = nullptr;
+    for (int i = 0; i < arquivos.size(); ++i) {
+        if (arquivos[i]->nome == origem) {
+            arquivoOrigem = arquivos[i];
+            break;
+        }
+    }
+
+    if (arquivoOrigem == nullptr) {
+        cout << "cp: arquivo '" << origem << "' não encontrado." << endl;
+        return;
+    }
+
+    if (!hasPermission(arquivoOrigem, usuarioAtualId, 'r')) {
+        cout << "cp: permissão negada para ler '" << origem << "'" << endl;
+        return;
+    }
+
+    for (int i = 0; i < arquivos.size(); ++i) {
+        if (arquivos[i]->nome == destino) {
+            cout << "cp: arquivo '" << destino << "' já existe." << endl;
+            return;
+        }
+    }
+
+    File* novoArquivo = new File;
+    novoArquivo->nome = destino;
+    novoArquivo->conteudo = arquivoOrigem->conteudo;
+    novoArquivo->tamanho = arquivoOrigem->tamanho;
+    novoArquivo->id = proximoIdArquivo;
+    novoArquivo->owner_id = usuarioAtualId;
+    novoArquivo->criado = time(nullptr);
+    novoArquivo->modificado = time(nullptr);
+    novoArquivo->acesso = time(nullptr);
+    novoArquivo->permissoes = 0644;
+
+    if (endsWith(destino, ".txt")) {
+        novoArquivo->tipo = TEXT;
+    } else if (endsWith(destino, ".csv")) {
+        novoArquivo->tipo = NUMERIC;
+    } else if (endsWith(destino, ".exe")) {
+        novoArquivo->tipo = PROGRAM;
+    } else {
+        novoArquivo->tipo = BINARY;
+    }
+
+    proximoIdArquivo++;
+    arquivos.push_back(novoArquivo);
+    cout << "cp: '" << origem << "' copiado para '" << destino << "'" << endl;
 }
 
-void mv(){
+void mv(string argumentos, Directory* diretorioAtual, int usuarioAtualId) {
+    int posEspaco = argumentos.find(' ');
+    if (posEspaco == string::npos) {
+        cout << "mv: uso: mv <origem> <destino>" << endl;
+        return;
+    }
 
+    string origem = argumentos.substr(0, posEspaco);
+    string destino = argumentos.substr(posEspaco + 1);
+
+    vector<File*>& arquivos = diretorioAtual->arquivos;
+
+    File* arquivoOrigem = nullptr;
+    for (int i = 0; i < arquivos.size(); ++i) {
+        if (arquivos[i]->nome == origem) {
+            arquivoOrigem = arquivos[i];
+            break;
+        }
+    }
+
+    if (arquivoOrigem == nullptr) {
+        cout << "mv: arquivo '" << origem << "' não encontrado." << endl;
+        return;
+    }
+
+    if (!hasPermission(arquivoOrigem, usuarioAtualId, 'w')) {
+        cout << "mv: permissão negada para renomear '" << origem << "'" << endl;
+        return;
+    }
+
+    for (int i = 0; i < arquivos.size(); ++i) {
+        if (arquivos[i]->nome == destino) {
+            cout << "mv: arquivo '" << destino << "' já existe." << endl;
+            return;
+        }
+    }
+
+    arquivoOrigem->nome = destino;
+    arquivoOrigem->modificado = time(nullptr);
+
+    if (endsWith(destino, ".txt")) {
+        arquivoOrigem->tipo = TEXT;
+    } else if (endsWith(destino, ".csv")) {
+        arquivoOrigem->tipo = NUMERIC;
+    } else if (endsWith(destino, ".exe")) {
+        arquivoOrigem->tipo = PROGRAM;
+    } else {
+        arquivoOrigem->tipo = BINARY;
+    }
+
+    cout << "mv: '" << origem << "' renomeado para '" << destino << "'" << endl;
 }
 
 void rm(){
 
 }
 
-void chmod(){}
+void chmod(){
+
+}
 
 void su(string argumentos, int& usuarioAtualId){
     bool usuarioValido = !argumentos.empty() && all_of(argumentos.begin(), argumentos.end(), ::isdigit);
@@ -277,6 +387,10 @@ int main(){
             cat(argumentos, diretorioAtual, usuarioAtualId);
         } else if (operacao == "su") {
             su(argumentos, usuarioAtualId);
+        } else if (operacao == "cp") {
+            cp(argumentos, diretorioAtual, usuarioAtualId);
+        } else if (operacao == "mv") {
+            mv(argumentos, diretorioAtual, usuarioAtualId);
         } else {
             cout << "Comando inválido!" << endl;
         }
