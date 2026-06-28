@@ -332,12 +332,77 @@ void mv(string argumentos, Directory* diretorioAtual, int usuarioAtualId) {
     cout << "mv: '" << origem << "' renomeado para '" << destino << "'" << endl;
 }
 
-void rm(){
+void rm(string argumentos, Directory* diretorioAtual, int usuarioAtualId) {
+    if (argumentos.empty()) {
+        cout << "rm: falta o nome do arquivo." << endl;
+        return;
+    }
 
+    vector<File*>& arquivos = diretorioAtual->arquivos;
+
+    for (int i = 0; i < arquivos.size(); ++i) {
+        if (arquivos[i]->nome == argumentos) {
+            if (!hasPermission(arquivos[i], usuarioAtualId, 'w')) {
+                cout << "rm: permissão negada para remover '" << argumentos << "'" << endl;
+                return;
+            }
+
+            File* arquivoTemp = arquivos[i];
+            arquivos.erase(arquivos.begin() + i);
+            delete arquivoTemp;
+            cout << "rm: arquivo '" << argumentos << "' removido." << endl;
+            return;
+        }
+    }
+
+    cout << "rm: arquivo '" << argumentos << "' não encontrado." << endl;
 }
 
-void chmod(){
+void chmod(string argumentos, Directory* diretorioAtual, int usuarioAtualId) {
+    int posEspaco = argumentos.find(' ');
+    if (posEspaco == string::npos) {
+        cout << "chmod: uso: chmod <permissao> <arquivo>" << endl;
+        return;
+    }
 
+    string permissao = argumentos.substr(0, posEspaco);
+    string nomeArquivo = argumentos.substr(posEspaco + 1);
+
+    bool permissaoValida = !permissao.empty() && permissao.length() <= 4 &&
+                           all_of(permissao.begin(), permissao.end(), ::isdigit);
+
+    if (permissaoValida) {
+        for (char c : permissao) {
+            if (c > '7') {
+                permissaoValida = false;
+                break;
+            }
+        }
+    }
+
+    if (!permissaoValida) {
+        cout << "chmod: permissão inválida. Use formato octal (ex: 755, 644)" << endl;
+        return;
+    }
+
+    vector<File*>& arquivos = diretorioAtual->arquivos;
+
+    for (int i = 0; i < arquivos.size(); ++i) {
+        if (arquivos[i]->nome == nomeArquivo) {
+            if (usuarioAtualId != 0 && usuarioAtualId != arquivos[i]->owner_id) {
+                cout << "chmod: permissão negada para alterar '" << nomeArquivo << "'. Apenas o proprietário pode alterar permissões." << endl;
+                return;
+            }
+
+            int novaPermissao = stoi(permissao, nullptr, 8);
+            arquivos[i]->permissoes = novaPermissao;
+            arquivos[i]->modificado = time(nullptr);
+            cout << "chmod: permissões de '" << nomeArquivo << "' alteradas para " << permissao << endl;
+            return;
+        }
+    }
+
+    cout << "chmod: arquivo '" << nomeArquivo << "' não encontrado." << endl;
 }
 
 void su(string argumentos, int& usuarioAtualId){
@@ -391,6 +456,10 @@ int main(){
             cp(argumentos, diretorioAtual, usuarioAtualId);
         } else if (operacao == "mv") {
             mv(argumentos, diretorioAtual, usuarioAtualId);
+        } else if (operacao == "rm") {
+            rm(argumentos, diretorioAtual, usuarioAtualId);
+        } else if (operacao == "chmod") {
+            chmod(argumentos, diretorioAtual, usuarioAtualId);
         } else {
             cout << "Comando inválido!" << endl;
         }
