@@ -439,7 +439,17 @@ int main(){
         }
 
         if (operacao == "mkdir"){
-            diretorioAtual->subDiretorios->push_back(mkdir(argumentos, diretorioAtual));
+            bool diretorioExiste = false;
+            for (int i = 0; i < diretorioAtual->subDiretorios->size(); ++i) {
+                if (diretorioAtual->subDiretorios->at(i)->nome == argumentos) {
+                    diretorioExiste = true;
+                    cout << "mkdir: diretório '" << argumentos << "' já existe." << endl;
+                    break;
+                }
+            }
+            if (!diretorioExiste) {
+                diretorioAtual->subDiretorios->push_back(mkdir(argumentos, diretorioAtual));
+            }
         } else if (operacao == "cd") {
             cd(diretorioAtual, argumentos);
         } else if (operacao == "touch") {
